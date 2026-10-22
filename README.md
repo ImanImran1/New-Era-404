@@ -14,7 +14,13 @@ Teman Jalan is an inclusive community walking platform designed to make walking 
 ### Team
 **New Era 404** — Universiti Teknologi MARA (UiTM), Shah Alam
 
-### Live Demo
-[Insert your GitHub Pages URL here]
+<h2 align="center">
+  <a href="https://imanimran1.github.io/New-Era-404/">
+    🚀 TRY TEMAN JALAN NOW 🚀
+  </a>
+</h2>
+<p align="center">
+  <em>Every journey home deserves peace of mind.</em>
+</p>
 
 Developed for the **Township of Tomorrow Hackathon**.
