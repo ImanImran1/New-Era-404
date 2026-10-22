@@ -1,0 +1,781 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Teman Jalan Prototype v2</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: map-first night-walk app. Schematic street map + street details on the left, tabbed panel (Route / Report / Walk with me / Council) on the right; stacks on phones. Lamp amber = lighting, violet = accessibility. */
+:root{
+  --bg:#eef1f6; --surface:#ffffff; --raise:#f6f8fb; --ink:#14213a; --muted:#56627b; --line:#d5dbe6;
+  --lamp:#b86e00; --lamp-glow:#f2a900; --safe:#16804f; --risk:#c4372b; --warn:#a85d00; --access:#5146d6;
+  --map:#e2e7ef; --block:#d6dce7; --road:#aab4c6; --park:#c6dfcb; --pin-ink:#ffffff;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0a1120; --surface:#111a2e; --raise:#16213a; --ink:#e6ebf4; --muted:#95a1b9; --line:#24304b;
+  --lamp:#ffb627; --lamp-glow:#ffc94d; --safe:#3ccf8e; --risk:#ff6f61; --warn:#ffb020; --access:#a7a2ff;
+  --map:#0d1630; --block:#141f3a; --road:#2b3755; --park:#12321f; --pin-ink:#0a1120; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0a1120; --surface:#111a2e; --raise:#16213a; --ink:#e6ebf4; --muted:#95a1b9; --line:#24304b;
+  --lamp:#ffb627; --lamp-glow:#ffc94d; --safe:#3ccf8e; --risk:#ff6f61; --warn:#ffb020; --access:#a7a2ff;
+  --map:#0d1630; --block:#141f3a; --road:#2b3755; --park:#12321f; --pin-ink:#0a1120; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+.wrap{max-width:1200px;margin:0 auto;padding-block:18px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.brand{display:flex;align-items:center;gap:12px}
+.mark{width:40px;height:40px;border-radius:12px;background:var(--ink);display:grid;place-items:center}
+.brand h1{font-family:var(--display);font-weight:800;font-size:26px;margin:0;letter-spacing:-.01em;line-height:1}
+.brand p{margin:3px 0 0;color:var(--muted);font-size:13px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;padding:5px 10px;border:1px solid var(--line);border-radius:999px;color:var(--muted);background:var(--surface)}
+.chip .dot{width:7px;height:7px;border-radius:50%;background:var(--lamp-glow)}
+
+.app{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:880px){.app{grid-template-columns:1fr}}
+.left{display:flex;flex-direction:column;gap:12px;min-width:0}
+
+.mapcard{background:var(--map);border:1px solid var(--line);border-radius:16px;overflow:hidden;position:relative}
+.mapbar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--surface);font-size:12.5px;color:var(--muted)}
+.key{display:inline-flex;align-items:center;gap:6px}
+.sw{width:22px;height:4px;border-radius:2px;display:inline-block}
+svg#map{display:block;width:100%;height:auto;cursor:pointer}
+svg#map.reporting{cursor:crosshair}
+.maphint{position:absolute;left:12px;bottom:12px;background:var(--surface);border:1px solid var(--lamp);color:var(--ink);font-size:13px;padding:7px 11px;border-radius:10px;max-width:calc(100% - 24px)}
+
+.info{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.info.empty{color:var(--muted);font-size:14px;border-style:dashed}
+.info h3{margin:0;font-family:var(--display);font-size:18px;font-weight:800}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.fact{background:var(--raise);border-radius:10px;padding:8px 10px}
+.fact .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.fact .v{font-weight:700;font-size:14px}
+.verdict{display:flex;gap:10px;align-items:flex-start;border-radius:10px;padding:10px 12px;font-size:14px;border:1.5px solid var(--safe)}
+.verdict.bad{border-color:var(--risk)}
+.verdict b{display:block}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;min-width:0}
+.tabs{display:grid;grid-template-columns:repeat(5,1fr);border-bottom:1px solid var(--line)}
+.tabs button{all:unset;cursor:pointer;text-align:center;padding:12px 2px;line-height:1.2;font-weight:700;font-size:12.5px;color:var(--muted);border-bottom:3px solid transparent}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--lamp-glow)}
+.tabs button:focus-visible{outline:2px solid var(--lamp);outline-offset:-2px}
+.pane{padding:18px;display:flex;flex-direction:column;gap:14px}
+h2{font-family:var(--display);font-weight:800;font-size:20px;margin:0;text-wrap:balance;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:13.5px;margin:-8px 0 0}
+label.f{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+select,input[type=text],input[type=date],input[type=time],textarea{font:inherit;font-size:15px;text-transform:none;letter-spacing:0;color:var(--ink);background:var(--raise);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
+textarea{min-height:64px;resize:vertical}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:420px){.row2{grid-template-columns:1fr}}
+.btn{font:inherit;font-weight:700;font-size:14.5px;border-radius:11px;padding:11px 16px;border:1px solid var(--line);background:var(--raise);color:var(--ink);cursor:pointer}
+.btn.primary{background:var(--lamp-glow);border-color:var(--lamp-glow);color:#1a1200}
+.btn.small{padding:6px 10px;font-size:12.5px;border-radius:8px}
+.btn:focus-visible{outline:2px solid var(--lamp);outline-offset:2px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.linkbtn{all:unset;cursor:pointer;color:var(--access);font-weight:700;font-size:13.5px;text-decoration:underline}
+
+.needs{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.needs label{display:flex;flex-direction:column;align-items:center;gap:2px;padding:9px 4px;cursor:pointer;font-weight:700;font-size:13.5px;text-align:center;background:var(--raise);border-right:1px solid var(--line)}
+.needs label:last-child{border-right:0}
+.needs label small{font-weight:400;font-size:11.5px;color:var(--muted)}
+.needs input{position:absolute;opacity:0;pointer-events:none}
+.needs label:has(input:checked){background:var(--ink);color:var(--bg)}
+.needs label:has(input:checked) small{color:var(--bg);opacity:.75}
+.needs label:has(input:focus-visible){outline:2px solid var(--lamp);outline-offset:-2px}
+
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.opt{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:6px;background:var(--raise)}
+.opt.win{border-color:var(--safe);box-shadow:inset 0 0 0 1px var(--safe)}
+.opt .lbl{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.opt .big{font-family:var(--display);font-weight:800;font-size:24px;font-variant-numeric:tabular-nums;line-height:1.1}
+.opt .meta{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.meter{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.meter i{display:block;height:100%;background:var(--lamp-glow)}
+.acc{font-size:12.5px;font-weight:700;border-radius:8px;padding:5px 8px;border:1px solid currentColor}
+.acc.ok{color:var(--safe)} .acc.no{color:var(--risk)} .acc.info{color:var(--access)}
+.why{font-size:13.5px;background:var(--raise);border-radius:10px;padding:10px 12px;border:1px dashed var(--line)}
+.why b{color:var(--safe)}
+.dirs{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.dirs li::marker{font-family:var(--mono);color:var(--muted)}
+.dirs .note{display:block;font-size:12.5px;color:var(--muted)}
+.dirs .warn{color:var(--risk);font-weight:700}
+.hd{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.hd h4{margin:0;font-size:13px;font-family:var(--mono);font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+
+.list{display:flex;flex-direction:column;gap:8px}
+.item{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--raise)}
+.item.match{border-color:var(--access)}
+.ava{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-weight:700;background:var(--line);color:var(--ink);font-size:13px}
+.item .n{font-weight:700}
+.item .d{font-size:12.5px;color:var(--muted)}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;border:1px solid var(--access);color:var(--access);margin:2px 4px 0 0}
+.ver{font-family:var(--mono);font-size:10.5px;color:var(--safe);letter-spacing:.04em;text-transform:uppercase}
+.state{border-radius:12px;padding:12px;border:1px solid var(--safe);background:var(--raise);font-size:14px;display:flex;flex-direction:column;gap:8px}
+.state.alt{border-color:var(--lamp-glow)}
+.safety{font-size:12.5px;color:var(--muted);display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}
+.safety span::before{content:"✓ ";color:var(--safe);font-weight:700}
+.prog{height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.prog i{display:block;height:100%;background:var(--safe);transition:width .4s}
+@media (prefers-reduced-motion:reduce){.prog i{transition:none}}
+
+.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.kpi{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--raise)}
+.kpi .v{font-family:var(--display);font-weight:800;font-size:24px;font-variant-numeric:tabular-nums}
+.kpi .k{font-size:12px;color:var(--muted)}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:440px}
+th{font-family:var(--mono);font-weight:500;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);background:var(--raise)}
+td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:0}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.p-open{color:var(--muted)} .p-esc{color:var(--risk)} .p-sch{color:var(--warn)} .p-fix{color:var(--safe)}
+.acts{display:flex;gap:6px;flex-wrap:wrap}
+
+.grp{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:-6px}
+.typegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(98px,1fr));gap:8px}
+.typegrid label{border:1px solid var(--line);border-radius:12px;padding:9px 6px;text-align:center;cursor:pointer;font-size:12.5px;font-weight:700;background:var(--raise);display:flex;flex-direction:column;align-items:center;gap:5px;line-height:1.25}
+.typegrid input{position:absolute;opacity:0;pointer-events:none}
+.typegrid label:has(input:checked){border-color:var(--lamp-glow);box-shadow:inset 0 0 0 1px var(--lamp-glow)}
+.typegrid label:has(input:focus-visible){outline:2px solid var(--lamp)}
+.photo{display:flex;gap:10px;align-items:center}
+.photo img{width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.loc{font-size:13.5px;padding:10px 12px;border-radius:10px;background:var(--raise);border:1px solid var(--line)}
+.loc.empty{color:var(--muted);border-style:dashed}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;font-weight:700;max-width:calc(100% - 32px);box-shadow:0 8px 24px rgba(0,0,0,.25);z-index:20}
+.foot{margin-top:14px;font-size:12px;color:var(--muted)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chipbtn{font:inherit;font-size:13px;font-weight:700;padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--raise);color:var(--ink);cursor:pointer}
+.chipbtn[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chipbtn:focus-visible{outline:2px solid var(--lamp);outline-offset:2px}
+.inv{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--raise);display:flex;flex-direction:column;gap:6px}
+.inv.joined{border-color:var(--safe)}
+.inv .t{font-weight:700;font-size:15px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.inv .d{font-size:13px;color:var(--muted)}
+.inv .bot{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.badge{font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:var(--ink);color:var(--bg)}
+.avs{display:flex;align-items:center;padding-left:6px}
+.avs span{width:26px;height:26px;border-radius:50%;background:var(--line);border:2px solid var(--raise);margin-left:-6px;font-size:10px;display:grid;place-items:center;font-weight:700}
+.avs em{font-style:normal;font-size:12.5px;color:var(--muted);margin-left:8px}
+.form{display:flex;flex-direction:column;gap:10px;border:1px dashed var(--line);border-radius:12px;padding:12px}
+.bubbles{display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;padding:4px}
+.bub{max-width:85%;padding:8px 11px;border-radius:12px;background:var(--raise);border:1px solid var(--line);font-size:14px}
+.bub.me{align-self:flex-end;background:var(--lamp-glow);color:#1a1200;border-color:var(--lamp-glow)}
+.bub .w{font-size:11.5px;font-weight:700;color:var(--muted);display:block}
+.bub.me .w{color:#4a3500}
+.send{display:flex;gap:8px}
+.sosfab{position:fixed;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:15;width:64px;height:64px;border-radius:50%;border:3px solid var(--surface);background:var(--risk);color:#fff;font:800 17px var(--display);letter-spacing:.04em;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.3)}
+.sosfab:focus-visible{outline:3px solid var(--lamp-glow);outline-offset:3px}
+.alarm{position:fixed;inset:0;z-index:30;background:#b3261e;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center;padding-block:24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+@media (prefers-reduced-motion:no-preference){.alarm{animation:flash .5s steps(2) infinite}}
+@keyframes flash{50%{background:#5c0f0a}}
+.alarm h2{color:#fff;font-size:40px}
+.alarm p{margin:0;font-size:17px;max-width:30ch}
+.alarm .num{font:800 64px var(--display);letter-spacing:.04em;user-select:all}
+.alarm .stop{font:800 20px var(--body);padding:18px 36px;border-radius:999px;border:0;background:#fff;color:#7a1712;cursor:pointer}
+.alarm .stop:focus-visible{outline:4px solid #ffc94d;outline-offset:4px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="mark" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 3v8" stroke="#f2a900" stroke-width="2.4" stroke-linecap="round"/><path d="M8 7h8l-1.5 3h-5z" fill="#f2a900"/><path d="M6 21c2-5 10-5 12 0" stroke="#f2a900" stroke-width="2" fill="none" stroke-linecap="round" opacity=".55"/></svg>
+      </div>
+      <div><h1>Teman Jalan</h1><p>Safe, step-free and accessible walks home · report what needs fixing</p></div>
+    </div>
+    <span class="chip"><span class="dot"></span>Prototype v2 · City of Elmina pilot · synthetic data</span>
+  </header>
+
+  <div class="app">
+    <div class="left">
+      <section class="mapcard" aria-label="Neighbourhood safety and accessibility map">
+        <div class="mapbar" id="legend"></div>
+        <svg id="map" viewBox="0 0 600 420" role="img" aria-label="Schematic map of a City of Elmina neighbourhood showing streets, lighting, accessibility barriers, hazards and routes"></svg>
+        <div class="maphint" id="maphint" hidden>Tap on a street to pin the hazard</div>
+      </section>
+      <section class="info empty" id="info" aria-live="polite">Tap any street or path on the map to see its lighting, pavement and whether it is wheelchair friendly.</section>
+    </div>
+
+    <section class="panel">
+      <div class="tabs" role="tablist">
+        <button role="tab" id="t-route" aria-selected="true" data-p="route">Route</button>
+        <button role="tab" id="t-report" aria-selected="false" data-p="report">Report</button>
+        <button role="tab" id="t-walk" aria-selected="false" data-p="walk">Walk with me</button>
+        <button role="tab" id="t-together" aria-selected="false" data-p="together">Jalan Bersama</button>
+        <button role="tab" id="t-council" aria-selected="false" data-p="council">Council</button>
+      </div>
+
+      <!-- ROUTE -->
+      <div class="pane" id="p-route">
+        <h2>Get home the safe way</h2>
+        <p class="sub">Routes are scored on lighting, hazards and your access needs, not just distance.</p>
+        <div class="needs" role="radiogroup" aria-label="My needs">
+          <label><input type="radio" name="need" id="need-walk" value="walk" checked>Walking<small>safest lit route</small></label>
+          <label><input type="radio" name="need" id="need-wheel" value="wheel">Wheelchair<small>step-free only</small></label>
+          <label><input type="radio" name="need" id="need-vision" value="vision">Low vision<small>tactile &amp; audio</small></label>
+        </div>
+        <div class="row2">
+          <label class="f">From<select id="from"></select></label>
+          <label class="f">To<select id="to"></select></label>
+        </div>
+        <div class="cmp" id="cmp" aria-live="polite"></div>
+        <div class="why" id="why"></div>
+        <div class="hd"><h4>Directions</h4><button class="btn small" id="speak">Read directions aloud</button></div>
+        <ol class="dirs" id="dirs"></ol>
+        <button class="btn primary" id="goWalk">Find a walking companion for this route</button>
+      </div>
+
+      <!-- REPORT -->
+      <div class="pane" id="p-report" hidden>
+        <h2>Report a hazard</h2>
+        <p class="sub">Three reports on the same spot send it to the council dashboard automatically.</p>
+        <div class="grp">Safety at night</div>
+        <div class="typegrid" role="radiogroup" aria-label="Safety hazards">
+          <label><input type="radio" name="htype" id="ht-light" value="light" checked><span class="hg" data-t="light"></span>Broken light</label>
+          <label><input type="radio" name="htype" id="ht-dark" value="dark"><span class="hg" data-t="dark"></span>Dark path</label>
+          <label><input type="radio" name="htype" id="ht-cross" value="cross"><span class="hg" data-t="cross"></span>Unsafe crossing</label>
+        </div>
+        <div class="grp">Accessibility</div>
+        <div class="typegrid" role="radiogroup" aria-label="Accessibility hazards">
+          <label><input type="radio" name="htype" id="ht-blocked" value="blocked"><span class="hg" data-t="blocked"></span>Walkway blocked</label>
+          <label><input type="radio" name="htype" id="ht-broken" value="broken"><span class="hg" data-t="broken"></span>Broken pavement</label>
+          <label><input type="radio" name="htype" id="ht-ramp" value="ramp"><span class="hg" data-t="ramp"></span>No kerb ramp</label>
+          <label><input type="radio" name="htype" id="ht-drain" value="drain"><span class="hg" data-t="drain"></span>Open drain</label>
+        </div>
+        <div class="loc empty" id="loc">No location yet. Tap the street on the map.</div>
+        <button class="btn" id="pick">Pin location on map</button>
+        <label class="f">Photo<input type="file" id="photo" accept="image/*"></label>
+        <div class="photo" id="photoPrev" hidden><img id="photoImg" alt="Hazard photo preview"><span style="font-size:13px;color:var(--muted)">Photo attached</span></div>
+        <label class="f">Note (optional)<textarea id="note" placeholder="e.g. Cars parked on the walkway every night after 8 pm"></textarea></label>
+        <button class="btn primary" id="submit" disabled>Submit report</button>
+      </div>
+
+      <!-- WALK -->
+      <div class="pane" id="p-walk" hidden>
+        <h2>Walk with me</h2>
+        <p class="sub" id="walkSub"></p>
+        <div id="walkBody"></div>
+        <div class="safety">
+          <span>IC-verified residents only</span><span>Public meeting points</span>
+          <span>Live trip sharing</span><span>Ratings after every walk</span>
+          <span>Report or block a user</span><span>No home addresses shown</span>
+        </div>
+        <label style="display:flex;gap:10px;align-items:center;font-size:14px"><input type="checkbox" id="offer"> I can walk with neighbours tonight (offer help)</label>
+      </div>
+
+      <!-- JALAN BERSAMA -->
+      <div class="pane" id="p-together" hidden>
+        <h2>Jalan Bersama</h2>
+        <p class="sub">Find neighbours to jog, brisk walk or cycle with. Same verified residents as Walk with me.</p>
+        <div id="tgBody"></div>
+      </div>
+
+      <!-- COUNCIL -->
+      <div class="pane" id="p-council" hidden>
+        <h2>Council &amp; township dashboard</h2>
+        <p class="sub">For MBSA and Sime Darby Property township management. Ranked by priority.</p>
+        <div class="kpis" id="kpis"></div>
+        <div class="tbl"><table><thead><tr><th>Hazard</th><th>Reports</th><th>Open</th><th>Status</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+        <button class="btn" id="copySum">Copy evidence summary for council</button>
+      </div>
+    </section>
+  </div>
+  <p class="foot">All residents, reports, neighbours, street measurements and fix times on this page are synthetic examples for the hackathon demo. Map is a schematic of a City of Elmina neighbourhood, not to scale (1 map unit ≈ 1.2 m). Walking speed 80 m/min; wheelchair speed 65 m/min. A path counts as wheelchair friendly with no steps, a slope of 8% or less, lowered kerbs and at least 1.2 m clear width.</p>
+</div>
+<button class="sosfab" id="sosFab" aria-label="SOS: sound alarm and alert my contact">SOS</button>
+<div class="alarm" id="alarm" role="alertdialog" aria-labelledby="alarmTitle" hidden>
+  <h2 id="alarmTitle">Alarm sounding</h2>
+  <p>Your trusted contact has your live location (demo). If you are in danger, call:</p>
+  <div class="num">999</div>
+  <p>Move towards light and people. The nearest safe spot is shown on your map.</p>
+  <button class="stop" id="stopAlarm">Stop alarm</button>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+<div class="sr" id="announce" aria-live="assertive"></div>
+
+<script>
+// ---------- Network (schematic) ----------
+const M_PER_PX = 1.2;
+const SPEED = {walk:80, wheel:65, vision:70};
+const COLS = [60,180,300,420,540], ROWS = [50,150,260,370];
+const N = {};
+ROWS.forEach((y,r)=>COLS.forEach((x,c)=>N[`${r}${c}`]={x,y}));
+const E = [];
+function addE(a,b,lit,kind,name){const dx=N[a].x-N[b].x, dy=N[a].y-N[b].y; E.push({id:a+'-'+b,a,b,lit,kind,name,len:Math.hypot(dx,dy)});}
+const rowName=['Persiaran Atmosfera','Jalan Elmina Green 2','Jalan Elmina Green 3','Jalan Elmina Green 4'];
+const rowLit=[0.95,0.5,0.5,0.75];
+for(let r=0;r<4;r++)for(let c=0;c<4;c++)addE(`${r}${c}`,`${r}${c+1}`,rowLit[r],r===0?'main':'street',rowName[r]);
+const colName=['Jalan Samanea','Lorong Elmina 1','Lorong Elmina 2','Lorong Elmina 3','Persiaran Elmina'];
+const colLit=[0.9,0.45,0.45,0.45,0.9];
+for(let c=0;c<5;c++)for(let r=0;r<3;r++)addE(`${r}${c}`,`${r+1}${c}`,colLit[c],(c===0||c===4)?'main':'street',colName[c]);
+addE('30','21',0.15,'park','Central Park footpath');
+addE('21','12',0.15,'park','Central Park footpath');
+addE('12','03',0.15,'park','Central Park footpath');
+// Accessibility attributes (synthetic survey, OpenStreetMap-style tags)
+const ACC={
+  '21-12':{stairs:true,width:1.2},
+  '30-21':{slope:6,width:1.2},
+  '12-03':{slope:5,width:1.2},
+  '10-20':{slope:9},
+  '00-10':{kerb:'raised'},
+  '11-21':{width:0.9},
+  '22-23':{kerb:'raised'}
+};
+E.forEach(e=>Object.assign(e,{stairs:false,slope:2,kerb:'lowered',width:e.kind==='park'?1.2:(e.kind==='main'?1.8:1.5),tactile:e.kind==='main'},ACC[e.id]||{}));
+const EBY = Object.fromEntries(E.map(e=>[e.id,e]));
+const AUDIO = new Set(['00','04','24','30']); // signal crossings with sound
+
+const PLACES=[
+  {id:'bus',label:'Bus stop · Persiaran Atmosfera',short:'Bus stop',node:'04'},
+  {id:'home',label:'Home · Elmina Green',short:'Home',node:'30'},
+  {id:'temu',label:'TEMU shops',short:'TEMU',node:'02'},
+  {id:'clinic',label:'24-hour clinic',short:'Clinic',node:'24'},
+  {id:'surau',label:'Surau Elmina Green',short:'Surau',node:'33'}
+];
+const SAFE_SPOTS=[{name:'24-hour clinic',node:'24'},{name:'Petrol station (24 h)',node:'14'},{name:'Guardhouse, Elmina Green',node:'31'},{name:'TEMU shops (open till 11 pm)',node:'02'}];
+
+// ---------- Hazards (synthetic seed) ----------
+const TYPES={
+  light:{name:'Broken streetlight',short:'Broken light',litDrop:0.5,pen:90,w:10,glyph:'L',col:'var(--lamp-glow)',ink:'#1a1200'},
+  dark:{name:'Dark / overgrown path',short:'Dark path',litDrop:0.3,pen:70,w:8,glyph:'D',col:'var(--muted)'},
+  cross:{name:'Unsafe crossing',short:'Unsafe crossing',litDrop:0,pen:180,w:15,glyph:'X',col:'var(--risk)'},
+  blocked:{name:'Walkway blocked (cars, bins)',short:'Blocked walkway',litDrop:0,pen:40,w:9,glyph:'B',col:'var(--access)',wheel:true,vision:true},
+  broken:{name:'Broken pavement',short:'Broken pavement',litDrop:0,pen:40,w:9,glyph:'P',col:'var(--access)',wheel:true,vision:true},
+  ramp:{name:'Missing kerb ramp',short:'No kerb ramp',litDrop:0,pen:20,w:8,glyph:'R',col:'var(--access)',wheel:true},
+  drain:{name:'Open drain, no cover',short:'Open drain',litDrop:0,pen:60,w:12,glyph:'O',col:'var(--access)',wheel:true,vision:true}
+};
+let seq=100;
+const H=[
+  {id:1,type:'light',edge:'21-12',t:.5,reports:4,days:9,status:'esc'},
+  {id:2,type:'dark',edge:'30-21',t:.45,reports:3,days:12,status:'esc'},
+  {id:3,type:'cross',edge:'13-14',t:.5,reports:3,days:6,status:'sch'},
+  {id:4,type:'light',edge:'11-12',t:.3,reports:1,days:2,status:'open'},
+  {id:5,type:'light',edge:'22-23',t:.6,reports:2,days:4,status:'open'},
+  {id:6,type:'dark',edge:'12-03',t:.55,reports:2,days:5,status:'open'},
+  {id:7,type:'blocked',edge:'11-12',t:.7,reports:2,days:3,status:'open'},
+  {id:8,type:'broken',edge:'02-12',t:.5,reports:1,days:1,status:'open'},
+  {id:9,type:'drain',edge:'32-33',t:.5,reports:3,days:7,status:'esc'},
+  {id:10,type:'ramp',edge:'23-24',t:.8,reports:1,days:2,status:'open'}
+];
+const FIXED_HIST=[21,14,30,9,17];
+
+// ---------- Scoring ----------
+const active = h => h.status!=='fix';
+const on = e => H.filter(h=>active(h)&&h.edge===e.id);
+function effLit(e){let l=e.lit;on(e).forEach(h=>l-=TYPES[h.type].litDrop);return Math.max(0,l);}
+function hazPen(e){return on(e).reduce((s,h)=>s+TYPES[h.type].pen*(1+0.25*(h.reports-1)),0);}
+function barriers(e){const b=[];if(e.stairs)b.push('Steps');if(e.slope>8)b.push(`Steep slope (${e.slope}%)`);if(e.kerb==='raised')b.push('No kerb ramp');if(e.width<1.2)b.push(`Narrow pavement (${e.width} m)`);return b;}
+function badge(e){if(e.stairs)return'Steps';if(e.slope>8)return e.slope+'% slope';if(e.kerb==='raised')return'No ramp';if(e.width<1.2)return'Narrow';return'';}
+const wheelHaz = e => on(e).filter(h=>TYPES[h.type].wheel);
+const visionHaz = e => on(e).filter(h=>TYPES[h.type].vision);
+function cost(e,mode){
+  if(mode==='fast')return e.len;
+  let c=e.len*(1+2.2*(1-effLit(e)))+hazPen(e);
+  if(mode==='wheel'){c+=barriers(e).length?6000:0;c+=wheelHaz(e).length*3000;c=c*1.0;}
+  if(mode==='vision'){c+=e.len*(e.tactile?0:0.6);c+=visionHaz(e).length*3000;if(e.stairs)c+=300;}
+  return c;
+}
+function dijkstra(src,dst,mode){
+  const dist={},prev={},q=new Set(Object.keys(N));
+  Object.keys(N).forEach(k=>dist[k]=Infinity);dist[src]=0;
+  while(q.size){let u=null;q.forEach(k=>{if(u===null||dist[k]<dist[u])u=k});q.delete(u);if(u===dst)break;
+    E.forEach(e=>{let v=null;if(e.a===u)v=e.b;else if(e.b===u)v=e.a;if(v&&q.has(v)){const nd=dist[u]+cost(e,mode);if(nd<dist[v]){dist[v]=nd;prev[v]={u,e:e.id}}}});}
+  const nodes=[dst],edges=[];let k=dst;while(k!==src&&prev[k]){edges.unshift(prev[k].e);k=prev[k].u;nodes.unshift(k);}
+  return {nodes,edges};
+}
+function stats(rt,need){
+  let len=0,litLen=0,tacLen=0;const bar=[],wh=[],vh=[];
+  rt.edges.forEach(id=>{const e=EBY[id];len+=e.len;litLen+=e.len*effLit(e);if(e.tactile)tacLen+=e.len;
+    barriers(e).forEach(b=>bar.push({b,e}));wheelHaz(e).forEach(h=>wh.push(h));visionHaz(e).forEach(h=>vh.push(h));});
+  const haz=H.filter(h=>active(h)&&rt.edges.includes(h.edge));
+  const m=len*M_PER_PX;
+  return {m:Math.round(m),min:Math.max(1,Math.round(m/SPEED[need])),lit:len?Math.round(100*litLen/len):100,tac:len?Math.round(100*tacLen/len):100,haz,bar,wh,vh,names:[...new Set(rt.edges.map(id=>EBY[id].name))]};
+}
+
+// ---------- State ----------
+let need='walk';
+try{const s=localStorage.getItem('tj-need');if(s&&SPEED[s]){need=s;document.getElementById('need-'+s).checked=true;}}catch(e){}
+let picked=null, selected=null, routes=null, picking=false;
+
+// ---------- Map ----------
+const svg=document.getElementById('map');
+const NS='http://www.w3.org/2000/svg';
+function el(tag,attrs,parent){const n=document.createElementNS(NS,tag);for(const k in attrs)n.setAttribute(k,attrs[k]);(parent||svg).appendChild(n);return n;}
+function pt(e,t){const A=N[e.a],B=N[e.b];return {x:A.x+(B.x-A.x)*t,y:A.y+(B.y-A.y)*t};}
+
+function legend(){
+  const L=document.getElementById('legend');
+  let h=`<span class="key"><span class="sw" style="background:var(--lamp-glow)"></span>Well lit</span><span class="key"><span class="sw" style="background:var(--safe);height:5px"></span>Recommended</span><span class="key"><span class="sw" style="background:repeating-linear-gradient(90deg,var(--muted) 0 5px,transparent 5px 9px)"></span>Fastest</span>`;
+  if(need==='wheel')h+=`<span class="key"><span class="sw" style="background:repeating-linear-gradient(90deg,var(--risk) 0 4px,transparent 4px 7px);height:5px"></span>Not wheelchair friendly</span>`;
+  if(need==='vision')h+=`<span class="key"><span class="sw" style="background:repeating-linear-gradient(90deg,var(--access) 0 2px,transparent 2px 5px);height:5px"></span>Tactile paving</span><span class="key"><span style="width:9px;height:9px;border-radius:50%;border:2px solid var(--access);display:inline-block"></span>Crossing with sound</span>`;
+  h+=`<span class="key"><span style="width:10px;height:10px;border-radius:50%;background:var(--access);display:inline-block"></span>Access hazard</span>`;
+  L.innerHTML=h;
+}
+
+function drawMap(){
+  svg.innerHTML='';
+  for(let r=0;r<3;r++)for(let c=0;c<4;c++){el('rect',{x:COLS[c]+12,y:ROWS[r]+12,width:COLS[c+1]-COLS[c]-24,height:ROWS[r+1]-ROWS[r]-24,rx:8,fill:'var(--block)'});}
+  el('path',{d:`M${N['30'].x},${N['30'].y} L${N['21'].x},${N['21'].y} L${N['12'].x},${N['12'].y} L${N['03'].x},${N['03'].y}`,stroke:'var(--park)','stroke-width':58,'stroke-linecap':'round','stroke-linejoin':'round',fill:'none'});
+  const pk=el('text',{x:250,y:236,'font-size':11,'font-family':'IBM Plex Mono, monospace',fill:'var(--muted)',transform:'rotate(-41 250 236)'});pk.textContent='CENTRAL PARK';
+  E.forEach(e=>{const A=N[e.a],B=N[e.b];const w=e.kind==='main'?9:e.kind==='park'?4:6;
+    el('line',{x1:A.x,y1:A.y,x2:B.x,y2:B.y,stroke:'var(--road)','stroke-width':w,'stroke-linecap':'round'});
+    const l=effLit(e);if(l>0.05)el('line',{x1:A.x,y1:A.y,x2:B.x,y2:B.y,stroke:'var(--lamp-glow)','stroke-width':w,'stroke-linecap':'round',opacity:(0.15+0.75*l).toFixed(2)});
+    if(need==='vision'&&e.tactile)el('line',{x1:A.x,y1:A.y,x2:B.x,y2:B.y,stroke:'var(--access)','stroke-width':3,'stroke-dasharray':'2 4','stroke-linecap':'round'});
+    if(need==='wheel'&&barriers(e).length)el('line',{x1:A.x,y1:A.y,x2:B.x,y2:B.y,stroke:'var(--risk)','stroke-width':4,'stroke-dasharray':'5 4'});
+  });
+  if(selected){const e=EBY[selected],A=N[e.a],B=N[e.b];el('line',{x1:A.x,y1:A.y,x2:B.x,y2:B.y,stroke:'var(--ink)','stroke-width':14,'stroke-linecap':'round',opacity:.18});}
+  const lab=(x,y,t,rot)=>{const n=el('text',{x,y,'font-size':9.5,fill:'var(--muted)','font-family':'Atkinson Hyperlegible, sans-serif','text-anchor':'middle',transform:rot?`rotate(${rot} ${x} ${y})`:''});n.textContent=t;};
+  lab(300,40,'Persiaran Atmosfera');lab(300,394,'Jalan Elmina Green 4');lab(44,210,'Jalan Samanea',-90);lab(560,210,'Persiaran Elmina',90);
+  if(routes){
+    const poly=rt=>rt.nodes.map(k=>`${N[k].x},${N[k].y}`).join(' ');
+    const same=routes.fast.edges.join()===routes.best.edges.join();
+    if(!same)el('polyline',{points:poly(routes.fast),fill:'none',stroke:'var(--muted)','stroke-width':3,'stroke-dasharray':'7 6','stroke-linecap':'round','stroke-linejoin':'round'});
+    el('polyline',{points:poly(routes.best),fill:'none',stroke:'var(--surface)','stroke-width':10,'stroke-linecap':'round','stroke-linejoin':'round',opacity:.9});
+    el('polyline',{points:poly(routes.best),fill:'none',stroke:'var(--safe)','stroke-width':5,'stroke-linecap':'round','stroke-linejoin':'round'});
+  }
+  if(need==='wheel')E.filter(e=>badge(e)).forEach(e=>{const p=pt(e,.5),t=badge(e),w=t.length*6+12;
+    const g=el('g',{});el('rect',{x:p.x-w/2,y:p.y-9,width:w,height:18,rx:9,fill:'var(--surface)',stroke:'var(--risk)','stroke-width':1.5},g);
+    const tx=el('text',{x:p.x,y:p.y+4,'text-anchor':'middle','font-size':10.5,'font-weight':700,fill:'var(--risk)','font-family':'Atkinson Hyperlegible, sans-serif'},g);tx.textContent=t;});
+  if(need==='vision')AUDIO.forEach(k=>el('circle',{cx:N[k].x,cy:N[k].y,r:14,fill:'none',stroke:'var(--access)','stroke-width':2}));
+  SAFE_SPOTS.forEach(s=>{const n=N[s.node];const g=el('g',{});el('rect',{x:n.x+8,y:n.y+6,width:12,height:12,rx:3,fill:'var(--safe)'},g);const ti=el('title',{},g);ti.textContent='Safe spot: '+s.name;});
+  PLACES.forEach(p=>{const n=N[p.node];const isEnd=routes&&(p.node===routes.best.nodes[0]||p.node===routes.best.nodes.at(-1));
+    el('circle',{cx:n.x,cy:n.y,r:isEnd?9:6,fill:'var(--surface)',stroke:'var(--ink)','stroke-width':isEnd?3:2});
+    const tx=n.x+(n.x>480?-12:12),anc=n.x>480?'end':'start';
+    const t=el('text',{x:tx,y:n.y-12,'font-size':12,'font-weight':700,fill:'var(--ink)','text-anchor':anc,'paint-order':'stroke',stroke:'var(--map)','stroke-width':4});t.textContent=p.short;});
+  H.filter(active).forEach(h=>{const p=pt(EBY[h.edge],h.t),T=TYPES[h.type];
+    const g=el('g',{});
+    el('circle',{cx:p.x,cy:p.y,r:h.status==='esc'?13:11,fill:T.col,stroke:'var(--surface)','stroke-width':2.5},g);
+    const t=el('text',{x:p.x,y:p.y+4,'text-anchor':'middle','font-size':11,'font-weight':700,fill:T.ink||'var(--pin-ink)','font-family':'IBM Plex Mono, monospace'},g);t.textContent=T.glyph;
+    const ti=el('title',{},g);ti.textContent=`${T.name} · ${h.reports} report${h.reports>1?'s':''} · ${EBY[h.edge].name}`;
+  });
+  if(meetNode){const n=N[meetNode];el('circle',{cx:n.x,cy:n.y,r:20,fill:'var(--access)','fill-opacity':.15,stroke:'var(--access)','stroke-width':3});
+    const lx=n.x>480?n.x-26:n.x+26,t=el('text',{x:lx,y:n.y+26,'text-anchor':n.x>480?'end':'start','font-size':12,'font-weight':700,fill:'var(--access)','paint-order':'stroke',stroke:'var(--map)','stroke-width':4});t.textContent='Meet here';}
+  if(picked){const p=pt(EBY[picked.edge],picked.t);el('circle',{cx:p.x,cy:p.y,r:15,fill:'none',stroke:'var(--ink)','stroke-width':2.5,'stroke-dasharray':'4 3'});}
+}
+
+// ---------- Street details ----------
+function showInfo(id){
+  selected=id;const e=EBY[id],b=barriers(e),hz=on(e),lit=Math.round(effLit(e)*100);
+  const box=document.getElementById('info');box.classList.remove('empty');
+  const wOk=!b.length&&!wheelHaz(e).length;
+  const reasons=[...b,...wheelHaz(e).map(h=>TYPES[h.type].short+' (reported)')];
+  box.innerHTML=`<h3>${e.name}</h3>
+  <div class="verdict ${wOk?'':'bad'}"><div><b style="color:${wOk?'var(--safe)':'var(--risk)'}">${wOk?'Wheelchair friendly':'Not wheelchair friendly'}</b>${wOk?'Step-free, gentle slope, lowered kerbs and enough width.':reasons.join(' · ')}</div></div>
+  <div class="facts">
+    <div class="fact"><div class="k">Lighting</div><div class="v">${lit}%</div></div>
+    <div class="fact"><div class="k">Pavement width</div><div class="v">${e.width} m</div></div>
+    <div class="fact"><div class="k">Slope</div><div class="v">${e.slope}%${e.slope>8?' · steep':''}</div></div>
+    <div class="fact"><div class="k">Steps</div><div class="v">${e.stairs?'Yes':'None'}</div></div>
+    <div class="fact"><div class="k">Kerb ramps</div><div class="v">${e.kerb==='raised'?'Missing':'Yes'}</div></div>
+    <div class="fact"><div class="k">Tactile paving</div><div class="v">${e.tactile?'Yes':'No'}</div></div>
+  </div>
+  <div style="font-size:13px;color:var(--muted)">${hz.length?'Open reports: '+hz.map(h=>`${TYPES[h.type].short} (${h.reports})`).join(', '):'No open reports on this stretch.'}</div>`;
+  drawMap();
+}
+
+// ---------- Route panel ----------
+const fromSel=document.getElementById('from'),toSel=document.getElementById('to');
+PLACES.forEach(p=>{fromSel.add(new Option(p.label,p.id));toSel.add(new Option(p.label,p.id));});
+fromSel.value='bus';toSel.value='home';
+const modeKey=()=>need==='walk'?'safe':need;
+function accLine(st){
+  if(need==='wheel'){const items=[...st.bar.map(x=>x.b),...st.wh.map(h=>TYPES[h.type].short)];return items.length?`<span class="acc no">Not step-free: ${[...new Set(items)].join(', ')}</span>`:`<span class="acc ok">Step-free all the way</span>`;}
+  if(need==='vision'){const items=st.vh.map(h=>TYPES[h.type].short);return `<span class="acc ${items.length?'no':'info'}">Tactile paving ${st.tac}%${items.length?' · '+[...new Set(items)].join(', '):''}</span>`;}
+  return '';
+}
+function directions(rt){
+  const groups=[];rt.edges.forEach((id,i)=>{const e=EBY[id];const g=groups.at(-1);
+    if(g&&g.name===e.name){g.edges.push(e);g.to=rt.nodes[i+1];}else groups.push({name:e.name,edges:[e],from:rt.nodes[i],to:rt.nodes[i+1]});});
+  const vec=(a,b)=>({x:N[b].x-N[a].x,y:N[b].y-N[a].y});
+  const out=[];
+  groups.forEach((g,i)=>{
+    const m=Math.round(g.edges.reduce((s,e)=>s+e.len,0)*M_PER_PX/10)*10;
+    let verb='Head along';
+    if(i>0){const p=groups[i-1];const v1=vec(p.from,p.to),v2=vec(g.from,g.to);const cr=v1.x*v2.y-v1.y*v2.x;verb=cr>0?'Turn right onto':cr<0?'Turn left onto':'Continue on';}
+    const notes=[];
+    if(need==='vision'){notes.push(g.edges.every(e=>e.tactile)?'Tactile paving all the way':'No tactile paving on this stretch, keep to the building side');}
+    const bs=[...new Set(g.edges.flatMap(barriers))];
+    const hz=g.edges.flatMap(on).filter(h=>need==='wheel'?TYPES[h.type].wheel:need==='vision'?TYPES[h.type].vision:true);
+    const warn=[...(need==='wheel'?bs:[]),...hz.map(h=>TYPES[h.type].short+' reported')];
+    if(AUDIO.has(g.to)&&i<groups.length-1)notes.push('Cross at the signal with sound');
+    out.push({text:`${verb} ${g.name} for ${m} m`,notes,warn:[...new Set(warn)]});
+  });
+  const dest=PLACES.find(p=>p.node===rt.nodes.at(-1));
+  out.push({text:`Arrive at ${dest?dest.short:'your destination'}`,notes:[],warn:[]});
+  return out;
+}
+let lastDirs=[];
+function plan(){
+  legend();
+  const a=PLACES.find(p=>p.id===fromSel.value).node,b=PLACES.find(p=>p.id===toSel.value).node;
+  const cmp=document.getElementById('cmp'),why=document.getElementById('why'),dirs=document.getElementById('dirs');
+  if(a===b){routes=null;cmp.innerHTML='';why.textContent='Pick two different places.';dirs.innerHTML='';lastDirs=[];drawMap();return;}
+  routes={fast:dijkstra(a,b,'fast'),best:dijkstra(a,b,modeKey())};
+  const f=stats(routes.fast,need),s=stats(routes.best,need);
+  const same=routes.fast.edges.join()===routes.best.edges.join();
+  const label={walk:'Recommended · safest',wheel:'Recommended · step-free',vision:'Recommended · low vision'}[need];
+  const card=(lbl,st,win)=>`<div class="opt${win?' win':''}"><span class="lbl">${lbl}</span><span class="big">${st.min} min</span><span class="meta">${st.m} m · ${st.haz.length} hazard${st.haz.length===1?'':'s'}</span><div class="meter" aria-label="Lit ${st.lit}%"><i style="width:${st.lit}%"></i></div><span class="meta">${st.lit}% well lit</span>${accLine(st)}</div>`;
+  cmp.innerHTML=same?card(label.replace('Recommended','Fastest &amp; recommended'),s,true):card('Fastest',f,false)+card(label,s,true);
+  // explanation
+  const sBlocked=need==='wheel'&&(s.bar.length||s.wh.length);
+  if(sBlocked){why.innerHTML=`<b style="color:var(--risk)">No fully step-free route right now.</b> This is the easiest option. Expect: ${[...new Set([...s.bar.map(x=>x.b),...s.wh.map(h=>TYPES[h.type].short)])].join(', ')}. Ask a companion with the wheelchair helper tag.`;}
+  else if(same){why.innerHTML=`<b>Good news:</b> the quickest way is also the best one for you tonight.`;}
+  else{
+    const avoided=[];
+    const std=need==='walk'?f:stats(dijkstra(a,b,'safe'),need);
+    if(need==='wheel')[...f.bar,...std.bar].forEach(x=>avoided.push(`${x.b.toLowerCase()} on ${x.e.name}`));
+    if(need==='wheel')[...f.wh,...std.wh].filter(h=>!s.wh.includes(h)).forEach(h=>avoided.push(`${TYPES[h.type].short.toLowerCase()} on ${EBY[h.edge].name}`));
+    if(need==='vision')[...f.vh,...std.vh].forEach(h=>avoided.push(`${TYPES[h.type].short.toLowerCase()} on ${EBY[h.edge].name}`));
+    f.haz.filter(h=>!s.haz.includes(h)&&!TYPES[h.type].wheel).forEach(h=>avoided.push(TYPES[h.type].short.toLowerCase()));
+    const extra=s.min-f.min;
+    why.innerHTML=`<b>${extra>0?'+'+extra+' min, ':''}${need==='wheel'?'step-free':'much safer'}.</b> Avoids ${[...new Set(avoided)].slice(0,4).join(', ')||'dim streets'}. Lighting ${f.lit}% → ${s.lit}%${need==='vision'?`, tactile paving ${f.tac}% → ${s.tac}%`:''}.`;
+  }
+  lastDirs=directions(routes.best);
+  dirs.innerHTML=lastDirs.map(d=>`<li>${d.text}${d.notes.map(n=>`<span class="note">${n}</span>`).join('')}${d.warn.map(w=>`<span class="note warn">Caution: ${w}</span>`).join('')}</li>`).join('');
+  document.getElementById('announce').textContent=`Recommended route ${s.min} minutes. ${accLine(s).replace(/<[^>]+>/g,'')}`;
+  drawMap();
+}
+fromSel.onchange=plan;toSel.onchange=plan;
+document.querySelectorAll('input[name=need]').forEach(r=>r.onchange=()=>{need=r.value;try{localStorage.setItem('tj-need',need)}catch(e){}plan();if(selected)showInfo(selected);});
+document.getElementById('speak').onclick=()=>{
+  const txt=lastDirs.map((d,i)=>`${i+1}. ${d.text}. ${d.notes.join('. ')} ${d.warn.map(w=>'Caution, '+w).join('. ')}`).join(' ');
+  try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(txt);u.lang='en-MY';u.rate=.95;speechSynthesis.speak(u);toast('Reading directions aloud');}
+  catch(e){toast('Read-aloud is not available in this browser. Your screen reader can read the list.');}
+};
+
+// ---------- Tabs ----------
+const tabs=[...document.querySelectorAll('.tabs button')];
+function show(p){tabs.forEach(b=>b.setAttribute('aria-selected',b.dataset.p===p));['route','report','walk','together','council'].forEach(k=>document.getElementById('p-'+k).hidden=k!==p);
+  if(p!=='report')setPicking(false);if(p==='council')renderCouncil();if(p==='walk')renderWalk();if(p==='together')renderTogether();
+  if(p!=='together'&&meetNode){meetNode=null;drawMap();}}
+tabs.forEach(b=>b.onclick=()=>show(b.dataset.p));
+
+let tt;function toast(m){const t=document.getElementById('toast');t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,3800);}
+
+// ---------- Report & map clicks ----------
+document.querySelectorAll('.hg').forEach(s=>{const T=TYPES[s.dataset.t];s.innerHTML=`<svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" fill="${T.col}"/><text x="13" y="17" text-anchor="middle" font-size="11" font-weight="700" font-family="IBM Plex Mono, monospace" fill="${T.ink||'var(--pin-ink)'}">${T.glyph}</text></svg>`;});
+function setPicking(on){picking=on;svg.classList.toggle('reporting',on);document.getElementById('maphint').hidden=!on;}
+document.getElementById('pick').onclick=()=>{setPicking(true);svg.scrollIntoView({behavior:'smooth',block:'center'});};
+svg.addEventListener('click',ev=>{
+  const r=svg.getBoundingClientRect(),x=(ev.clientX-r.left)*600/r.width,y=(ev.clientY-r.top)*420/r.height;
+  let best=null;E.forEach(e=>{const A=N[e.a],B=N[e.b],dx=B.x-A.x,dy=B.y-A.y;let t=((x-A.x)*dx+(y-A.y)*dy)/(dx*dx+dy*dy);t=Math.max(.12,Math.min(.88,t));const px=A.x+dx*t,py=A.y+dy*t,d=Math.hypot(x-px,y-py);if(!best||d<best.d)best={d,edge:e.id,t};});
+  if(best.d>40){if(picking)toast('Tap closer to a street or path');return;}
+  if(picking){
+    picked={edge:best.edge,t:best.t};setPicking(false);
+    const lc=document.getElementById('loc');lc.classList.remove('empty');lc.textContent=`Pinned on ${EBY[best.edge].name}`;
+    document.getElementById('submit').disabled=false;drawMap();
+  } else showInfo(best.edge);
+});
+document.getElementById('photo').onchange=e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{document.getElementById('photoImg').src=rd.result;document.getElementById('photoPrev').hidden=false;};rd.readAsDataURL(f);};
+document.getElementById('submit').onclick=()=>{
+  const type=document.querySelector('input[name=htype]:checked').value;
+  let h=H.find(x=>active(x)&&x.edge===picked.edge&&x.type===type);
+  if(h){h.reports++;}else{h={id:++seq,type,edge:picked.edge,t:picked.t,reports:1,days:0,status:'open'};H.push(h);}
+  let msg=`Report added. ${h.reports} report${h.reports>1?'s':''} on this spot.`;
+  if(h.reports>=3&&h.status==='open'){h.status='esc';msg='3 reports reached. Sent to the council dashboard.';}
+  picked=null;document.getElementById('submit').disabled=true;document.getElementById('note').value='';document.getElementById('photo').value='';document.getElementById('photoPrev').hidden=true;
+  const lc=document.getElementById('loc');lc.classList.add('empty');lc.textContent='No location yet. Tap the street on the map.';
+  toast(msg+' Routes updated.');plan();if(selected)showInfo(selected);
+};
+
+// ---------- Walk with me ----------
+const NB=[
+  {i:'AR',n:'Aisyah R.',d:'Elmina Green · 180 m away',r:4.9,w:23,tags:['Sighted guide']},
+  {i:'DT',n:'Daniel T.',d:'Elmina Green · 350 m away',r:4.8,w:11,tags:['Wheelchair helper']},
+  {i:'ML',n:'Mei Ling K.',d:'Elmina Gardens · 520 m away',r:5.0,w:7,tags:[]},
+  {i:'RH',n:'Pak Rahim',d:'Rukun Tetangga volunteer · 600 m',r:4.9,w:41,tags:['Sighted guide','Wheelchair helper']}
+];
+let walk={state:'list',who:null,none:false,eta:0,prog:0,timer:null};
+const needTag=()=>need==='wheel'?'Wheelchair helper':need==='vision'?'Sighted guide':null;
+function renderWalk(){
+  const b=document.getElementById('walkBody');
+  const from=PLACES.find(p=>p.id===fromSel.value).short,to=PLACES.find(p=>p.id===toSel.value).short;
+  const s=routes?stats(routes.best,need):null;
+  document.getElementById('walkSub').textContent=`Tonight: ${from} → ${to}${s?`, ${s.min} min`:''}. Example neighbours below.`;
+  if(walk.state==='list'&&!walk.none){
+    const tag=needTag();
+    const list=[...NB].sort((x,y)=>(tag&&y.tags.includes(tag))-(tag&&x.tags.includes(tag)));
+    b.innerHTML=`<div class="list">${list.map(p=>{const k=NB.indexOf(p),m=tag&&p.tags.includes(tag);return `<div class="item${m?' match':''}"><div class="ava">${p.i}</div><div><div class="n">${p.n} <span class="ver">✓ verified</span></div><div class="d">${p.d} · ★ ${p.r} · ${p.w} walks</div>${p.tags.map(t=>`<span class="tag">${t}</span>`).join('')}${m?'<span class="tag" style="border-color:var(--safe);color:var(--safe)">Matches your needs</span>':''}${joinedHosts().has(p.n)?'<span class="tag" style="border-color:var(--lamp);color:var(--lamp)">From your Jalan Bersama group</span>':''}</div><button class="btn small" data-k="${k}">Request</button></div>`}).join('')}</div>
+    <button class="linkbtn" id="simNone">Demo: what if nobody is free?</button>`;
+    b.querySelectorAll('button[data-k]').forEach(x=>x.onclick=()=>{walk.state='wait';walk.who=NB[+x.dataset.k];renderWalk();setTimeout(()=>{if(walk.state==='wait'){walk.state='ok';renderWalk();}},1800);});
+    document.getElementById('simNone').onclick=()=>{walk.none=true;renderWalk();};
+  } else if(walk.none&&walk.state==='list'){
+    const spots=routes?SAFE_SPOTS.filter(sp=>routes.best.nodes.includes(sp.node)):[];
+    b.innerHTML=`<div class="state alt"><div><b>Nobody is free right now.</b> You still won't walk alone.</div>
+      <button class="btn primary" id="wmh">Start “Watch me home”</button>
+      <div style="font-size:13.5px">Your trusted contact follows your trip live. If you stop for 2 minutes, leave the route, or miss your arrival time, we check on you and then alert them.</div>
+      <div style="font-size:13.5px"><b>Safe spots on your route:</b> ${spots.length?spots.map(x=>x.name).join(', '):'none on this route; nearest is the 24-hour clinic'}.</div>
+      <div class="acts"><button class="btn small" id="sec">Ask township security to escort</button><button class="btn small" id="back">Back to neighbours</button></div></div>`;
+    document.getElementById('wmh').onclick=startWatch;
+    document.getElementById('sec').onclick=()=>toast('Request sent to Elmina township security (demo). They will call you.');
+    document.getElementById('back').onclick=()=>{walk.none=false;renderWalk();};
+  } else if(walk.state==='wait'){
+    b.innerHTML=`<div class="state alt">Waiting for <b>${walk.who.n}</b> to accept…</div>`;
+  } else if(walk.state==='ok'){
+    b.innerHTML=`<div class="state"><div><b>${walk.who.n} accepted.</b> Meet at the public meeting point: <b>Bus stop shelter, Persiaran Atmosfera</b> in 4 minutes.</div>
+      ${s?`<div style="font-size:13px;color:var(--muted)">You'll walk the recommended route together: ${s.min} min, ${s.lit}% well lit.</div>`:''}
+      <div class="acts"><button class="btn small primary" id="share">Copy trip update</button><button class="btn small" id="done">Arrived safely</button><button class="btn small" id="cancel">Cancel</button></div></div>`;
+    document.getElementById('share').onclick=async()=>{const txt=`Teman Jalan: I'm walking home with verified neighbour ${walk.who.n}. ETA ${s?s.min:10} min.`;try{await navigator.clipboard.writeText(txt);toast('Trip update copied. Paste it to your contact.');}catch(e){toast(txt);}};
+    document.getElementById('done').onclick=()=>{toast(`Glad you're home. Rate your walk with ${walk.who.n} later.`);walk={state:'list',who:null,none:false};renderWalk();};
+    document.getElementById('cancel').onclick=()=>{walk={state:'list',who:null,none:false};renderWalk();};
+  } else if(walk.state==='watch'){
+    b.innerHTML=`<div class="state"><div><b>Watch me home is on.</b> Your contact can see your trip. ETA ${walk.eta} min.</div>
+      <div class="prog" aria-label="Trip progress"><i style="width:${walk.prog}%"></i></div>
+      <div id="checkin"></div>
+      <div class="acts"><button class="btn small" id="stop">Demo: I stopped moving</button><button class="btn small primary" id="home">I've arrived</button><button class="btn small" id="sos" style="border-color:var(--risk);color:var(--risk)">SOS · call 999</button></div></div>`;
+    document.getElementById('stop').onclick=()=>{document.getElementById('checkin').innerHTML=`<div class="state alt"><b>Are you OK?</b> You haven't moved for 2 minutes.<div class="acts"><button class="btn small" id="okb">I'm OK</button><button class="btn small" id="alertb">Alert my contact</button></div></div>`;
+      document.getElementById('okb').onclick=()=>{document.getElementById('checkin').innerHTML='';toast('Thanks. We will keep watching your trip.');};
+      document.getElementById('alertb').onclick=()=>{document.getElementById('checkin').innerHTML='';toast('Your contact has your live location (demo).');};};
+    document.getElementById('home').onclick=endWatch;
+    document.getElementById('sos').onclick=startAlarm;
+  }
+}
+function startWatch(){const s=routes?stats(routes.best,need):{min:10};walk.state='watch';walk.eta=s.min;walk.prog=8;renderWalk();
+  clearInterval(walk.timer);walk.timer=setInterval(()=>{if(walk.state!=='watch'){clearInterval(walk.timer);return;}walk.prog=Math.min(92,walk.prog+6);const bar=document.querySelector('.prog i');if(bar)bar.style.width=walk.prog+'%';},1500);}
+function endWatch(){clearInterval(walk.timer);toast('Arrived. Your contact has been told you are home.');walk={state:'list',who:null,none:false};renderWalk();}
+document.getElementById('goWalk').onclick=()=>show('walk');
+document.getElementById('offer').onchange=e=>toast(e.target.checked?'You are listed as available tonight until 11 pm.':'You are no longer listed tonight.');
+
+// ---------- Council ----------
+const ST={open:['Collecting reports','p-open'],esc:['Sent to council','p-esc'],sch:['Repair scheduled','p-sch'],fix:['Fixed','p-fix']};
+let fixedNow=[];
+const prio=h=>h.reports*10+TYPES[h.type].w+h.days*0.5;
+function renderCouncil(){
+  const open=H.filter(active);
+  const allFix=[...FIXED_HIST,...fixedNow];
+  const avg=(allFix.reduce((a,b)=>a+b,0)/allFix.length).toFixed(1);
+  const accessOpen=open.filter(h=>TYPES[h.type].wheel||TYPES[h.type].vision).length+E.filter(e=>barriers(e).length).length;
+  document.getElementById('kpis').innerHTML=[[open.length,'Open hazards'],[H.filter(h=>h.status==='esc').length,'Waiting on council'],[accessOpen,'Accessibility barriers'],[avg+' d','Average time to fix']].map(([v,k])=>`<div class="kpi"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');
+  const rows=[...H].sort((a,b)=>(a.status==='fix')-(b.status==='fix')||prio(b)-prio(a));
+  document.getElementById('rows').innerHTML=rows.map(h=>{const T=TYPES[h.type];return `<tr><td><b>${T.name}</b>${T.wheel||T.vision?' <span class="tag">Access</span>':''}<br><span style="color:var(--muted)">${EBY[h.edge].name}</span></td><td>${h.reports}</td><td>${h.days} d</td><td><span class="pill ${ST[h.status][1]}">${ST[h.status][0]}</span></td><td><div class="acts">${h.status==='esc'||h.status==='open'?`<button class="btn small" data-a="sch" data-id="${h.id}">Schedule</button>`:''}${h.status!=='fix'?`<button class="btn small" data-a="fix" data-id="${h.id}">Mark fixed</button>`:''}</div></td></tr>`}).join('');
+  document.querySelectorAll('#rows button').forEach(b=>b.onclick=()=>{const h=H.find(x=>x.id==b.dataset.id);
+    if(b.dataset.a==='sch'){h.status='sch';toast('Repair scheduled. Reporters are notified.');}
+    else{h.status='fix';fixedNow.push(h.days);toast('Marked fixed. Removed from the map and routes updated.');plan();if(selected)showInfo(selected);}
+    renderCouncil();});
+}
+document.getElementById('copySum').onclick=async()=>{
+  const lines=H.filter(active).sort((a,b)=>prio(b)-prio(a)).map((h,i)=>`${i+1}. ${TYPES[h.type].name}, ${EBY[h.edge].name}: ${h.reports} resident reports, open ${h.days} days (${ST[h.status][0]})`);
+  const bars=E.filter(e=>barriers(e).length).map(e=>`- ${e.name}: ${barriers(e).join(', ')}`);
+  const txt=`Teman Jalan evidence summary, City of Elmina pilot\nResident reports:\n${lines.join('\n')}\nPermanent accessibility barriers:\n${bars.join('\n')}`;
+  try{await navigator.clipboard.writeText(txt);toast('Summary copied. Paste it into an email or e-Aduan.');}catch(e){toast('Copy blocked here. Select the table text instead.');}
+};
+
+// ---------- Jalan Bersama ----------
+const MEET={park:{name:'Central Park main gate',node:'21'},guard:{name:'Elmina Green guardhouse',node:'31'},temu:{name:'TEMU plaza',node:'02'},bus:{name:'Bus stop shelter, Persiaran Atmosfera',node:'04'}};
+const ACT={walk:'Brisk walk',jog:'Jog',cycle:'Cycle',home:'Walk home together'};
+const pad2=n=>String(n).padStart(2,'0');
+const ymd=x=>`${x.getFullYear()}-${pad2(x.getMonth()+1)}-${pad2(x.getDate())}`;
+function defaultWhen(){const now=new Date(),x=new Date(now.getTime()+30*60000);x.setMinutes(x.getMinutes()<30?30:60,0,0);return {d:ymd(x),t:`${pad2(x.getHours())}:${pad2(x.getMinutes())}`,min:ymd(now),max:ymd(new Date(now.getTime()+30*864e5))};}
+function fmtWhen(ds,ts){const [y,m,d]=ds.split('-').map(Number),[hh,mm]=ts.split(':').map(Number);
+  const now=new Date(),t0=new Date(now.getFullYear(),now.getMonth(),now.getDate()),diff=Math.round((new Date(y,m-1,d)-t0)/864e5);
+  const time=`${((hh+11)%12)+1}:${pad2(mm)} ${hh<12?'am':'pm'}`;
+  const day=diff===0?(hh>=18?'Tonight':'Today'):diff===1?'Tomorrow':new Date(y,m-1,d).toLocaleDateString('en-MY',{weekday:'short',day:'numeric',month:'short'});
+  return `${day} ${time}`;}
+const ini=n=>n.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let invId=10;
+const INV=[
+  {id:1,act:'walk',when:'Tonight 9:00 pm',meet:'park',host:'Aisyah R.',pace:'Easy, 6–7 km/h',going:['Aisyah R.','Nurul H.','Siti A.'],size:6,women:true,tags:['Beginner friendly','Lit loop only'],joined:false,replied:false,
+   chat:[{who:'Aisyah R.',t:'Two laps of the lit loop, about 45 min. Bring water!'},{who:'Nurul H.',t:'Count me in. See you at the gate.'}]},
+  {id:2,act:'home',when:'Tonight 10:15 pm',meet:'bus',host:'Pak Rahim',pace:'Relaxed',going:['Pak Rahim','Mei Ling K.'],size:5,women:false,tags:['After the last bus','Rukun Tetangga'],joined:false,replied:false,
+   chat:[{who:'Pak Rahim',t:'I wait at the bus stop shelter for the 10:10 bus every night. Anyone heading to Elmina Green can walk with us.'}]},
+  {id:3,act:'jog',when:'Tomorrow 6:30 am',meet:'park',host:'Daniel T.',pace:'5 km at 6:00 min/km',going:['Daniel T.','Hafiz M.','Kumar S.','Jia Wen L.'],size:8,women:false,tags:['Weekday mornings'],joined:false,replied:false,
+   chat:[{who:'Daniel T.',t:'Morning 5K before work. We start on time!'},{who:'Kumar S.',t:'Weather looks clear tomorrow.'}]},
+  {id:4,act:'cycle',when:'Saturday 7:00 am',meet:'guard',host:'Mei Ling K.',pace:'15 km, easy',going:['Mei Ling K.','Farah Z.','Arif N.','Lim K.','Devi R.'],size:10,women:false,tags:['Family friendly','Elmina tracks'],joined:false,replied:false,
+   chat:[{who:'Mei Ling K.',t:'Kids on bikes are welcome. We stop at the lake for breakfast.'}]}
+];
+let tgFilter='all',tgChat=null,tgForm=false,meetNode=null;
+const joinedHosts=()=>new Set(INV.filter(i=>i.joined).map(i=>i.host));
+function renderTogether(){
+  const b=document.getElementById('tgBody');
+  if(tgChat){
+    const v=INV.find(i=>i.id===tgChat);meetNode=MEET[v.meet].node;drawMap();
+    b.innerHTML=`<button class="linkbtn" id="tgBack">← All activities</button>
+      <div class="inv joined"><div class="t">${ACT[v.act]} · ${esc(v.when)}</div><div class="d">Meet at ${MEET[v.meet].name} (marked on the map) · ${esc(v.pace)} · ${v.going.length} going: ${esc(v.going.join(', '))}</div></div>
+      <div class="why" style="font-size:12.5px">For your safety, phone numbers and home addresses are hidden in chats. Meet only at the public point. Long-press a message to report it.</div>
+      <div class="bubbles" id="bubbles" aria-live="polite">${v.chat.map(m=>`<div class="bub${m.who==='You'?' me':''}"><span class="w">${esc(m.who)}</span>${esc(m.t)}</div>`).join('')}</div>
+      ${v.joined?`<div class="send"><input type="text" id="tgMsg" placeholder="Message the group" aria-label="Message the group"><button class="btn primary" id="tgSend">Send</button></div>`:`<button class="btn primary" id="tgJoinChat">Join to chat</button>`}`;
+    const bb=document.getElementById('bubbles');bb.scrollTop=bb.scrollHeight;
+    document.getElementById('tgBack').onclick=()=>{tgChat=null;meetNode=null;drawMap();renderTogether();};
+    if(v.joined){
+      const send=()=>{const inp=document.getElementById('tgMsg');let t=inp.value.trim();if(!t)return;
+        if(/(\+?6?0)?1\d[- ]?\d{3,4}[- ]?\d{4}/.test(t)||/\d{8,}/.test(t)){t=t.replace(/\+?\d[\d -]{7,}\d/g,'[number hidden]');toast('For safety, phone numbers are hidden. Keep chatting in the app.');}
+        v.chat.push({who:'You',t});renderTogether();
+        if(!v.replied){v.replied=true;setTimeout(()=>{v.chat.push({who:v.host,t:`Great, see you at ${MEET[v.meet].name}!`});if(tgChat===v.id)renderTogether();},1300);}};
+      document.getElementById('tgSend').onclick=send;
+      document.getElementById('tgMsg').onkeydown=e=>{if(e.key==='Enter')send();};
+      document.getElementById('tgMsg').focus();
+    } else document.getElementById('tgJoinChat').onclick=()=>{join(v);renderTogether();};
+    return;
+  }
+  const dflt=defaultWhen();
+  const fl=[['all','All'],['walk','Brisk walk'],['jog','Jog'],['cycle','Cycle'],['home','Walk home'],['women','Women only']];
+  const list=INV.filter(i=>tgFilter==='all'||(tgFilter==='women'?i.women:i.act===tgFilter));
+  b.innerHTML=`<div class="chips" role="group" aria-label="Filter activities">${fl.map(([k,l])=>`<button class="chipbtn" data-f="${k}" aria-pressed="${tgFilter===k}">${l}</button>`).join('')}</div>
+    ${tgForm?`<div class="form">
+      <label class="f">Activity<select id="tg-act"><option value="walk">Brisk walk</option><option value="jog">Jog</option><option value="cycle">Cycle</option><option value="home">Walk home together</option></select></label>
+      <div class="row2"><label class="f">Date<input type="date" id="tg-date" value="${dflt.d}" min="${dflt.min}" max="${dflt.max}"></label><label class="f">Start time<input type="time" id="tg-time" value="${dflt.t}" step="300"></label></div>
+      <label class="f">Meeting point (public places only)<select id="tg-meet">${Object.entries(MEET).map(([k,m])=>`<option value="${k}">${m.name}</option>`).join('')}</select></label>
+      <label class="f">Pace<select id="tg-pace"><option>Easy</option><option>Moderate</option><option>Fast</option></select></label>
+      <label style="display:flex;gap:10px;align-items:center;font-size:14px"><input type="checkbox" id="tg-women"> Women only</label>
+      <div class="acts"><button class="btn primary" id="tgPost">Post invite</button><button class="btn" id="tgCancel">Cancel</button></div></div>`
+    :`<button class="btn primary" id="tgNew">Post an invite</button>`}
+    <div class="list">${list.length?list.map(v=>`<div class="inv${v.joined?' joined':''}">
+      <div class="t"><span class="badge">${ACT[v.act]}</span>${esc(v.when)}</div>
+      <div class="d">Hosted by <b style="color:var(--ink)">${esc(v.host)}</b> <span class="ver">✓ verified</span> · Meet at ${MEET[v.meet].name} · ${esc(v.pace)}</div>
+      <div>${v.women?'<span class="tag">Women only</span>':''}${v.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>
+      <div class="bot"><div class="avs">${v.going.slice(0,5).map(n=>`<span title="${esc(n)}">${ini(n)}</span>`).join('')}<em title="${esc(v.going.join(', '))}">${v.going.length} ${v.going.length===1?'person':'people'} going${v.joined?', including you':''}</em></div>
+        <div class="acts"><button class="btn small" data-chat="${v.id}">Chat (${v.chat.length})</button>${v.host==='You'?'':`<button class="btn small ${v.joined?'':'primary'}" data-join="${v.id}">${v.joined?'Leave':'Join'}</button>`}</div></div>
+    </div>`).join(''):'<div class="why">No activities match this filter yet. Post the first one.</div>'}</div>`;
+  b.querySelectorAll('[data-f]').forEach(x=>x.onclick=()=>{tgFilter=x.dataset.f;renderTogether();});
+  b.querySelectorAll('[data-chat]').forEach(x=>x.onclick=()=>{tgChat=+x.dataset.chat;renderTogether();});
+  b.querySelectorAll('[data-join]').forEach(x=>x.onclick=()=>{const v=INV.find(i=>i.id==x.dataset.join);if(v.joined)leave(v);else join(v);renderTogether();});
+  if(tgForm){document.getElementById('tgCancel').onclick=()=>{tgForm=false;renderTogether();};
+    document.getElementById('tgPost').onclick=()=>{const g=id=>document.getElementById(id);
+      const ds=g('tg-date').value,ts=g('tg-time').value;
+      if(!ds||!ts){toast('Pick a date and a start time.');return;}
+      const [y,mo,d]=ds.split('-').map(Number),[hh,mm]=ts.split(':').map(Number),dt=new Date(y,mo-1,d,hh,mm);
+      if(dt<new Date()){toast('That time has already passed. Pick a later time.');return;}
+      if(dt-new Date()>30*864e5){toast('Invites can be up to 30 days ahead.');return;}
+      const when=fmtWhen(ds,ts);
+      INV.unshift({id:++invId,act:g('tg-act').value,when,meet:g('tg-meet').value,host:'You',pace:g('tg-pace').value,going:['You'],women:g('tg-women').checked,tags:['New'],joined:true,replied:true,chat:[{who:'You',t:'Hi neighbours, join me!'}]});
+      tgForm=false;tgFilter='all';toast('Invite posted. Verified neighbours nearby will see it.');renderTogether();};}
+  else document.getElementById('tgNew').onclick=()=>{tgForm=true;renderTogether();};
+}
+function join(v){if(v.joined)return;v.joined=true;v.going.push('You');toast(`You joined ${v.host}'s ${ACT[v.act].toLowerCase()}. Meet at ${MEET[v.meet].name}.`);}
+function leave(v){v.joined=false;v.going=v.going.filter(n=>n!=='You');toast('You left this activity.');}
+
+// ---------- SOS alarm ----------
+let ac=null,siren=[];
+function startAlarm(){
+  const ov=document.getElementById('alarm');if(!ov.hidden)return;ov.hidden=false;
+  try{
+    ac=ac||new (window.AudioContext||window.webkitAudioContext)();ac.resume();
+    const osc=ac.createOscillator(),lfo=ac.createOscillator(),lfoGain=ac.createGain(),gain=ac.createGain();
+    osc.type='sawtooth';osc.frequency.value=1050;
+    lfo.type='triangle';lfo.frequency.value=2.2;lfoGain.gain.value=450;
+    lfo.connect(lfoGain);lfoGain.connect(osc.frequency);
+    gain.gain.value=0.7;osc.connect(gain);gain.connect(ac.destination);
+    osc.start();lfo.start();siren=[osc,lfo];
+  }catch(e){toast('Sound is blocked on this device. The alert still went to your contact (demo).');}
+  try{navigator.vibrate&&navigator.vibrate([600,200,600,200,600,200,600,200,600]);}catch(e){}
+  document.getElementById('stopAlarm').focus();
+}
+function stopAlarm(){
+  siren.forEach(n=>{try{n.stop()}catch(e){}});siren=[];
+  try{navigator.vibrate&&navigator.vibrate(0);}catch(e){}
+  document.getElementById('alarm').hidden=true;
+  toast('Alarm stopped. Your contact was told you are safe (demo).');
+}
+document.getElementById('sosFab').onclick=startAlarm;
+document.getElementById('stopAlarm').onclick=stopAlarm;
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!document.getElementById('alarm').hidden)stopAlarm();});
+
+plan();
+</script>
+
+</body></html>
